@@ -17,7 +17,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.11.0'
+          version: '6.10.3'
           arch: 'win64_msvc2022_64'
           modules: 'qtwebengine qtwebchannel qtpositioning'
 
@@ -25,6 +25,17 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+
+      # CI-only workaround: the .pro requires Qt >= 6.11.0, but aqt (used by
+      # install-qt-action) cannot yet fetch Qt 6.11+ on Windows because Qt
+      # restructured its download repo layout for these releases. This patches
+      # the version gate in the CI checkout only (the committed .pro is untouched)
+      # so we can build against the newest Qt aqt can actually install (6.10.3).
+      - name: Relax Qt version gate for CI build
+        working-directory: Launcher
+        shell: pwsh
+        run: |
+          (Get-Content GflessClient.pro -Raw) -replace '6\.11\.0', '6.10.0' | Set-Content GflessClient.pro -NoNewline
 
       - name: qmake
         working-directory: Launcher
