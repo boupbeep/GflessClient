@@ -1,4 +1,5 @@
 #include "gameforgeaccount.h"
+#include <QDebug>
 
 GameforgeAccount::GameforgeAccount(const QString &gfEmail,
     const QString &gfPassword,
@@ -61,6 +62,27 @@ void GameforgeAccount::updateGameAccounts()
 
 QString GameforgeAccount::getToken(const QString &accountId) const
 {
+    QString code = auth->getToken(accountId);
+
+    if (!code.isEmpty()) {
+        return code;
+    }
+
+    if (email.isEmpty() || password.isEmpty()) {
+        return {};
+    }
+
+    qDebug() << "GameforgeAccount::getToken failed, attempting re-authentication for account" << accountId;
+
+    bool captcha = false;
+    QString gfChallengeId;
+    bool wrongCredentials = false;
+
+    if (!auth->authenticate(email, password, captcha, gfChallengeId, wrongCredentials)) {
+        qDebug() << "GameforgeAccount::getToken re-authentication failed for account" << accountId;
+        return {};
+    }
+
     return auth->getToken(accountId);
 }
 

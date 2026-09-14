@@ -1,0 +1,42 @@
+name: Build Launcher
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.11.0'
+          arch: 'win64_msvc2022_64'
+          modules: 'qtwebengine qtwebchannel qtpositioning'
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: qmake
+        working-directory: Launcher
+        run: qmake GflessClient.pro CONFIG+=release
+
+      - name: nmake
+        working-directory: Launcher
+        run: nmake
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GflessClient-Launcher
+          path: Launcher/bin/*.exe
+          if-no-files-found: error
