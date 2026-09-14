@@ -171,7 +171,11 @@ bool NostaleAuth::authenticate(const QString &email, const QString &password, bo
 
     jsonResponse = QJsonDocument::fromJson(reply->readAll()).object();
 
-    qDebug() << jsonResponse;
+    QJsonObject loggedResponse = jsonResponse;
+    if (loggedResponse.contains("token")) {
+        loggedResponse["token"] = "<masked>";
+    }
+    qDebug() << loggedResponse;
 
     if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 201)
     {
