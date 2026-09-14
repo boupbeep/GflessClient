@@ -228,6 +228,14 @@ QString NostaleAuth::getToken(const QString &accountId)
 
     generateGameSessionId();
 
+    const qint64 SETTLE_MS = 3000;
+    qint64 sinceAuth = QDateTime::currentMSecsSinceEpoch() - lastReauthMs;
+
+    if (lastReauthMs > 0 && sinceAuth < SETTLE_MS) {
+        qDebug() << "fresh token, settling" << (SETTLE_MS - sinceAuth) << "ms before play_now";
+        QThread::sleep(std::chrono::milliseconds(SETTLE_MS - sinceAuth));
+    }
+
     if (!sendIovation(accountId)) {
         return {};
     }
