@@ -4,6 +4,8 @@
 #include <QNetworkProxy>
 #include <QtZlib/zlib.h>
 #include <QThread>
+#include <QEventLoop>
+#include <QDateTime>
 
 NostaleAuth::NostaleAuth(const QString &identityPath, const QString& installationID, bool proxy, const QString &proxyHost, const QString &proxyPort, const QString &proxyUser, const QString &proxyPasswd, QObject *parent)
     : QObject(parent)
@@ -208,8 +210,12 @@ bool NostaleAuth::authenticate(const QString &email, const QString &password, bo
     }
 
     token = jsonResponse["token"].toString();
+    tokenIp = getEgressIp();
+    lastReauthMs = QDateTime::currentMSecsSinceEpoch();
     otpCode.clear();
     otpRequired = false;
+
+    qDebug() << "NostaleAuth::authenticate token minted on IP" << tokenIp;
 
     return true;
 }
@@ -717,6 +723,54 @@ void NostaleAuth::setToken(const QString &newToken)
 QString NostaleAuth::getToken() const
 {
     return token;
+}
+
+QString NostaleAuth::getEgressIp()
+{
+    // Deliberately not using SyncNetworAccesskManager here: its
+    // handleReplyError() pops a QMessageBox::critical on any network error,
+    // which would show a modal if this echo request fails. This is just a
+    // best-effort probe, so failures are silent (empty string).
+    QNetworkAccessManager mgr;
+    mgr.setProxy(networkManager->proxy());
+
+    QNetworkRequest request(QUrl("https://api.ipify.org?format=text"));
+    request.setTransferTimeout(5000);
+
+    QNetworkReply* reply = mgr.get(request);
+
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    QString ip;
+
+    if (reply->error() == QNetworkReply::NoError) {
+        ip = QString::fromUtf8(reply->readAll()).trimmed();
+    }
+
+    reply->deleteLater();
+
+    return ip;
+}
+
+QString NostaleAuth::getTokenIp() const
+{
+    return tokenIp;
+}
+
+void NostaleAuth::setTokenIp(const QString &ip)
+{
+    tokenIp = ip;
+}
+
+bool NostaleAuth::canReauthNow() const
+{
+    if (lastReauthMs == 0) {
+        return true;
+    }
+
+    return QDateTime::currentMSecsSinceEpoch() - lastReauthMs > 60000;
 }
 
 QString NostaleAuth::getInstallationId() const

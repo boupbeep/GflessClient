@@ -74,6 +74,7 @@ void MainWindow::loadSettings()
         QString email = settings.value("email", "").toString();
         QString password = settings.value("password", "").toString();
         QString token = settings.value("token", "").toString();
+        QString tokenIp = settings.value("token_ip", "").toString();
         QString identity = settings.value("identity_path", "").toString();
         QString installationId = settings.value("installation_id", "").toString();
         QString proxyIp = settings.value("proxy_ip", "").toString();
@@ -85,8 +86,16 @@ void MainWindow::loadSettings()
 
         if (token.isEmpty())
             addGameforgeAccount(email, password, identity, installationId, customClientPath, proxyIp, socksPort, proxyUsername, proxyPassword, useProxy);
-        else
+        else {
             addGameforgeAccount(email, password, token, identity, installationId, customClientPath, proxyIp, socksPort, proxyUsername, proxyPassword, useProxy);
+
+            // A legacy token with no known mint IP will trigger one re-auth on the
+            // next Play (GameforgeAccount::getToken treats an empty mint IP as
+            // "needs reauth"), which migrates it cleanly.
+            if (!tokenIp.isEmpty() && !gfAccounts.isEmpty()) {
+                gfAccounts.last()->setTokenIp(tokenIp);
+            }
+        }
     }
 
     settings.endArray();
@@ -124,6 +133,7 @@ void MainWindow::saveSettings()
         settings.setValue("email", acc->getEmail());
         settings.setValue("password", acc->getPassword());
         settings.setValue("token", acc->getAuth()->getToken());
+        settings.setValue("token_ip", acc->getAuth()->getTokenIp());
         settings.setValue("identity_path", acc->getIdentityPath());
         settings.setValue("installation_id", acc->getAuth()->getInstallationId());
         settings.setValue("custom_client", acc->getcustomClientPath());
@@ -980,10 +990,25 @@ void MainWindow::openAccount(const Profile *profile, QQueue<int> accountIndexes)
 
     ui->statusbar->showMessage("Trying to open account " + gameAccount.getName(), 10000);
 
-    QString token = gameAccount.getGfAcc()->getToken(gameAccount.getId());
+    GameforgeAccount::TokenFailureReason tokenFailureReason = GameforgeAccount::TokenFailureReason::None;
+    QString token = gameAccount.getGfAcc()->getToken(gameAccount.getId(), &tokenFailureReason);
 
     if (token.isEmpty()) {
-        ui->statusbar->showMessage("Couldn't get token for account " + gameAccount.getName(), 10000);
+        QString msg;
+
+        switch (tokenFailureReason) {
+            case GameforgeAccount::TokenFailureReason::AntiFlap:
+                msg = "IP changed too recently, wait 60s before retrying account " + gameAccount.getName();
+                break;
+            case GameforgeAccount::TokenFailureReason::ReauthFailed:
+                msg = "IP changed, re-add the account to solve captcha/OTP for account " + gameAccount.getName();
+                break;
+            default:
+                msg = "Couldn't get token for account " + gameAccount.getName();
+                break;
+        }
+
+        ui->statusbar->showMessage(msg, 10000);
     }
     else {
         DWORD pid = 0;

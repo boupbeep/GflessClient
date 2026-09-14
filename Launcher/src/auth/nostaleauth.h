@@ -59,6 +59,13 @@ public:
     void setToken(const QString &newToken);
     QString getToken() const;
 
+    QString getEgressIp();
+
+    QString getTokenIp() const;
+    void setTokenIp(const QString &ip);
+
+    bool canReauthNow() const;
+
 signals:
     void captchaStart();
     void captchaEnd();
@@ -132,6 +139,9 @@ private:
     QString proxyUsername;
     QString proxyPassword;
     bool useProxy;
+
+    QString tokenIp;
+    qint64 lastReauthMs = 0;
 };
 
 #endif // NOSTALEAUTH_H

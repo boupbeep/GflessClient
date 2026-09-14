@@ -9,6 +9,13 @@ class GameforgeAccount : public QObject
 {
     Q_OBJECT
 public:
+    enum class TokenFailureReason {
+        None,          // token obtained, or not applicable
+        AntiFlap,      // re-auth needed but suppressed, IP changed too recently
+        ReauthFailed,  // re-auth needed and attempted, but failed (captcha/OTP/wrong credentials, or missing credentials)
+        Generic        // token empty for any other reason (e.g. iovation failed with a matching IP)
+    };
+
     explicit GameforgeAccount(
         const QString& gfEmail,
         const QString& gfPassword,
@@ -33,7 +40,7 @@ public:
 
     void updateGameAccounts();
 
-    QString getToken(const QString& accountId) const;
+    QString getToken(const QString& accountId, TokenFailureReason* reason = nullptr) const;
     QString getEmail() const;
 
     QString getPassword() const;
@@ -45,6 +52,8 @@ public:
     QString getcustomClientPath() const;
 
     void setOtpCode(const QString& otpCode);
+
+    void setTokenIp(const QString& ip);
 
     bool getOtpRequired() const;
 

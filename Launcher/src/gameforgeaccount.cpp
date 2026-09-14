@@ -1,4 +1,5 @@
 #include "gameforgeaccount.h"
+#include <QDebug>
 
 GameforgeAccount::GameforgeAccount(const QString &gfEmail,
     const QString &gfPassword,
@@ -59,9 +60,71 @@ void GameforgeAccount::updateGameAccounts()
     gameAccounts = auth->getAccounts();
 }
 
-QString GameforgeAccount::getToken(const QString &accountId) const
+QString GameforgeAccount::getToken(const QString &accountId, TokenFailureReason *reason) const
 {
-    return auth->getToken(accountId);
+    if (reason) {
+        *reason = TokenFailureReason::None;
+    }
+
+    QString cur = auth->getEgressIp();
+    QString mintIp = auth->getTokenIp();
+
+    bool needReauth = auth->getToken().isEmpty()
+        || mintIp.isEmpty()
+        || (!cur.isEmpty() && cur != mintIp);
+
+    if (!needReauth) {
+        QString token = auth->getToken(accountId);
+
+        if (token.isEmpty() && reason) {
+            *reason = TokenFailureReason::Generic;
+        }
+
+        return token;
+    }
+
+    if (!auth->canReauthNow()) {
+        qDebug() << "GameforgeAccount::getToken reauth suppressed (anti-flap) for account" << accountId;
+
+        if (reason) {
+            *reason = TokenFailureReason::AntiFlap;
+        }
+
+        return {};
+    }
+
+    if (email.isEmpty() || password.isEmpty()) {
+        if (reason) {
+            *reason = TokenFailureReason::ReauthFailed;
+        }
+
+        return {};
+    }
+
+    qDebug() << "GameforgeAccount::getToken egress IP changed (" << mintIp << "->" << cur
+              << "), re-authenticating BEFORE play for account" << accountId;
+
+    bool captcha = false;
+    QString gfChallengeId;
+    bool wrongCredentials = false;
+
+    if (!auth->authenticate(email, password, captcha, gfChallengeId, wrongCredentials)) {
+        qDebug() << "GameforgeAccount::getToken re-authentication failed for account" << accountId;
+
+        if (reason) {
+            *reason = TokenFailureReason::ReauthFailed;
+        }
+
+        return {};
+    }
+
+    QString token = auth->getToken(accountId);
+
+    if (token.isEmpty() && reason) {
+        *reason = TokenFailureReason::Generic;
+    }
+
+    return token;
 }
 
 QString GameforgeAccount::getEmail() const
@@ -87,6 +150,11 @@ const NostaleAuth *GameforgeAccount::getAuth() const
 void GameforgeAccount::setOtpCode(const QString &otpCode)
 {
     auth->setOtpCode(otpCode);
+}
+
+void GameforgeAccount::setTokenIp(const QString &ip)
+{
+    auth->setTokenIp(ip);
 }
 
 bool GameforgeAccount::getOtpRequired() const
