@@ -73,6 +73,10 @@ QString GameforgeAccount::getToken(const QString &accountId, TokenFailureReason 
         || mintIp.isEmpty()
         || (!cur.isEmpty() && cur != mintIp);
 
+    qDebug() << "play check: egress ip" << (cur.isEmpty() ? "<echo failed>" : cur)
+              << "mint ip" << (mintIp.isEmpty() ? "<none>" : mintIp)
+              << "reauth" << needReauth;
+
     if (!needReauth) {
         QString token = auth->getToken(accountId);
 

@@ -241,7 +241,17 @@ QString NostaleAuth::getToken(const QString &accountId)
     }
 
     if (!sendIovation(accountId)) {
-        return {};
+        const qint64 IOVATION_RETRY_MS = 2500;
+
+        qDebug() << "iovation failed, retrying once after" << IOVATION_RETRY_MS << "ms";
+        QThread::sleep(std::chrono::milliseconds(IOVATION_RETRY_MS));
+
+        generateGameSessionId();
+
+        if (!sendIovation(accountId)) {
+            qDebug() << "iovation failed twice, giving up";
+            return {};
+        }
     }
 
     // This sleep is a MUST, otherwise the request to thin/codes will fail
