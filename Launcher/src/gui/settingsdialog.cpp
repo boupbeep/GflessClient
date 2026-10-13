@@ -5,6 +5,9 @@
 #include <QFile>
 #include <QStyleFactory>
 #include <QListWidgetItem>
+#include <QMessageBox>
+#include <QSettings>
+#include <QDateTime>
 
 #include <array>
 
@@ -309,15 +312,92 @@ QStringList SettingsDialog::collectGamePaths() const
     return paths;
 }
 
+QStringList SettingsDialog::exePathsForDir(const QString &dir) const
+{
+    QStringList exePaths;
+
+    QString globalPath = getGameClientPath();
+    if (!globalPath.isEmpty() && globalPath.left(globalPath.lastIndexOf("/")).compare(dir, Qt::CaseInsensitive) == 0) {
+        if (!exePaths.contains(globalPath, Qt::CaseInsensitive))
+            exePaths.append(globalPath);
+    }
+
+    for (GameforgeAccount* acc : gfAccounts) {
+        QString customPath = acc->getcustomClientPath();
+
+        if (customPath.isEmpty())
+            continue;
+
+        if (customPath.left(customPath.lastIndexOf("/")).compare(dir, Qt::CaseInsensitive) == 0) {
+            if (!exePaths.contains(customPath, Qt::CaseInsensitive))
+                exePaths.append(customPath);
+        }
+    }
+
+    return exePaths;
+}
+
+QString SettingsDialog::sanitizeKey(const QString &path) const
+{
+    QString key = path;
+    key.replace('/', '_');
+    key.replace('\\', '_');
+    key.replace(':', '_');
+    return key;
+}
+
+QString SettingsDialog::formatPathDisplay(const QString &path) const
+{
+    QSettings settings;
+    settings.beginGroup("GameUpdates");
+    QDateTime timestamp = settings.value(sanitizeKey(path)).toDateTime();
+    settings.endGroup();
+
+    if (!timestamp.isValid())
+        return path;
+
+    return path + "    " + QChar(0x2713) + " " + timestamp.toString("dd/MM/yyyy HH:mm");
+}
+
 void SettingsDialog::populateGamePaths(const QStringList &paths)
 {
     ui->gamePathsListWidget->clear();
 
     for (const QString& path : paths) {
-        QListWidgetItem* item = new QListWidgetItem(path, ui->gamePathsListWidget);
+        QListWidgetItem* item = new QListWidgetItem(formatPathDisplay(path), ui->gamePathsListWidget);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
         item->setCheckState(Qt::Checked);
+        item->setData(Qt::UserRole, path);
+        item->setData(Qt::UserRole + 1, exePathsForDir(path));
     }
+}
+
+void SettingsDialog::markPathUpdated(const QString &path)
+{
+    QSettings settings;
+    settings.beginGroup("GameUpdates");
+    settings.setValue(sanitizeKey(path), QDateTime::currentDateTime());
+    settings.endGroup();
+
+    for (int i = 0; i < ui->gamePathsListWidget->count(); ++i) {
+        QListWidgetItem* item = ui->gamePathsListWidget->item(i);
+
+        if (item->data(Qt::UserRole).toString().compare(path, Qt::CaseInsensitive) == 0) {
+            item->setText(formatPathDisplay(path));
+            break;
+        }
+    }
+}
+
+void SettingsDialog::on_gamePathsListWidget_itemDoubleClicked(QListWidgetItem *item)
+{
+    QStringList exePaths = item->data(Qt::UserRole + 1).toStringList();
+
+    QString text = exePaths.isEmpty()
+        ? QStringLiteral("No known executable path for this directory.")
+        : exePaths.join("\n");
+
+    QMessageBox::information(this, "Game executable path(s)", text);
 }
 
 void SettingsDialog::setGameforgeAccounts(const QVector<GameforgeAccount *> &accounts)
@@ -334,7 +414,7 @@ QStringList SettingsDialog::getSelectedGamePaths() const
         QListWidgetItem* item = ui->gamePathsListWidget->item(i);
 
         if (item->checkState() == Qt::Checked)
-            paths.append(item->text());
+            paths.append(item->data(Qt::UserRole).toString());
     }
 
     return paths;

@@ -418,7 +418,10 @@ void MainWindow::updateGames(const QStringList &gameDirs)
         GameUpdater updater(gfAccounts, gameDir, this);
 
         GameUpdateDialog updateDialog(&updater, this);
-        updateDialog.exec();
+
+        if (updateDialog.exec() == QDialog::Accepted) {
+            settingsDialog->markPathUpdated(gameDir);
+        }
     }
 }
 

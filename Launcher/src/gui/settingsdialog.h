@@ -12,6 +12,8 @@ namespace Ui {
 class SettingsDialog;
 }
 
+class QListWidgetItem;
+
 enum Theme
 {
     ThemeModernWindows = 0,
@@ -74,6 +76,8 @@ public:
 
     void setGameforgeAccounts(const QVector<GameforgeAccount*>& accounts);
 
+    void markPathUpdated(const QString& path);
+
 signals:
     void profilesPathSelected(QString);
 
@@ -96,9 +100,14 @@ private slots:
 
     void on_selectAllCheckBox_toggled(bool checked);
 
+    void on_gamePathsListWidget_itemDoubleClicked(QListWidgetItem* item);
+
 private:
     void initLanguageComboBox();
     QStringList collectGamePaths() const;
+    QStringList exePathsForDir(const QString& dir) const;
+    QString sanitizeKey(const QString& path) const;
+    QString formatPathDisplay(const QString& path) const;
 
     Ui::SettingsDialog *ui;
     QVector<GameforgeAccount*> gfAccounts;
