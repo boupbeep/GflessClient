@@ -29,6 +29,8 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
+class GameUpdateManagerDialog;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -77,9 +79,13 @@ private slots:
 
     void on_createGameAccButton_clicked();
 
+    void on_actionUpdate_game_files_triggered();
+
     void updateGames(const QStringList& gameDirs);
 
 private:
+    void updateGamePaths(const QStringList& gameDirs, GameUpdateManagerDialog* managerDialog);
+    QStringList collectAllGameDirs() const;
     void openAccount(const Profile* profile, QQueue<int> accountIndexes);
     void createTrayIcon();
     bool checkGameClientPath();

@@ -6,6 +6,7 @@
 #include "identitydialog.h"
 #include "editmultipleprofileaccountsdialog.h"
 #include "gameupdatedialog.h"
+#include "gameupdatemanagerdialog.h"
 #include "creategameaccountdialog.h"
 #include "otpdialog.h"
 #include <QQueue>
@@ -29,16 +30,13 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->accountsListWidget, &QListWidget::customContextMenuRequested, this, &MainWindow::showContextMenu);
     connect(gflessServer, &QLocalServer::newConnection, this, &MainWindow::handleLocalConnection);
     connect(settingsDialog, &SettingsDialog::profilesPathSelected, this, &MainWindow::loadAccountProfiles);
-    connect(settingsDialog, &SettingsDialog::updateRequested, this, &MainWindow::updateGames);
 
     setupDefaultProfile();
     loadSettings();
     loadAccountProfiles(settingsDialog->getProfilesPath());
 
-    if (settingsDialog->getCheckUpdates()) {
-        settingsDialog->setGameforgeAccounts(gfAccounts);
-        updateGames(settingsDialog->getSelectedGamePaths());
-    }
+    if (settingsDialog->getCheckUpdates())
+        updateGames(collectAllGameDirs());
 }
 
 MainWindow::~MainWindow()
@@ -411,6 +409,11 @@ void MainWindow::displayProfile(int index)
 
 void MainWindow::updateGames(const QStringList &gameDirs)
 {
+    updateGamePaths(gameDirs, nullptr);
+}
+
+void MainWindow::updateGamePaths(const QStringList &gameDirs, GameUpdateManagerDialog *managerDialog)
+{
     for (const QString& gameDir : gameDirs) {
         if (gameDir.isEmpty())
             continue;
@@ -419,10 +422,37 @@ void MainWindow::updateGames(const QStringList &gameDirs)
 
         GameUpdateDialog updateDialog(&updater, this);
 
-        if (updateDialog.exec() == QDialog::Accepted) {
-            settingsDialog->markPathUpdated(gameDir);
+        if (updateDialog.exec() == QDialog::Accepted && managerDialog) {
+            managerDialog->markPathUpdated(gameDir);
         }
     }
+}
+
+QStringList MainWindow::collectAllGameDirs() const
+{
+    QStringList paths;
+
+    QString globalPath = settingsDialog->getGameClientPath();
+    if (!globalPath.isEmpty()) {
+        QString dir = globalPath.left(globalPath.lastIndexOf("/"));
+
+        if (!dir.isEmpty() && !paths.contains(dir, Qt::CaseInsensitive))
+            paths.append(dir);
+    }
+
+    for (GameforgeAccount* acc : gfAccounts) {
+        QString customPath = acc->getcustomClientPath();
+
+        if (customPath.isEmpty())
+            continue;
+
+        QString dir = customPath.left(customPath.lastIndexOf("/"));
+
+        if (!dir.isEmpty() && !paths.contains(dir, Qt::CaseInsensitive))
+            paths.append(dir);
+    }
+
+    return paths;
 }
 
 void MainWindow::createTrayIcon()
@@ -520,8 +550,18 @@ bool MainWindow::checkGameClientPath()
 
 void MainWindow::on_actionSettings_triggered()
 {
-    settingsDialog->setGameforgeAccounts(gfAccounts);
     settingsDialog->exec();
+}
+
+void MainWindow::on_actionUpdate_game_files_triggered()
+{
+    GameUpdateManagerDialog dialog(gfAccounts, settingsDialog->getGameClientPath(), this);
+
+    connect(&dialog, &GameUpdateManagerDialog::updateRequested, this, [this, &dialog](const QStringList& paths) {
+        updateGamePaths(paths, &dialog);
+    });
+
+    dialog.exec();
 }
 
 void MainWindow::on_actionAbout_3_triggered()

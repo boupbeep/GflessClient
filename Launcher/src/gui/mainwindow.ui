@@ -170,6 +170,7 @@
     </property>
     <addaction name="actionSave_profiles"/>
     <addaction name="actionIdentity_generator"/>
+    <addaction name="actionUpdate_game_files"/>
     <addaction name="actionSettings"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
@@ -213,6 +214,11 @@
   <action name="actionIdentity_generator">
    <property name="text">
     <string>Identity generator</string>
+   </property>
+  </action>
+  <action name="actionUpdate_game_files">
+   <property name="text">
+    <string>Update game files</string>
    </property>
   </action>
  </widget>
