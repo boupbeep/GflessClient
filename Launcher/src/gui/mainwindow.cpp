@@ -24,7 +24,7 @@ MainWindow::MainWindow(QWidget *parent)
     gflessServer->listen("GflessClient");
     createTrayIcon();
 
-    setWindowTitle("Gfless Client v" + QString(APP_VERSION));
+    setWindowTitle("Gfless Client v" + QString(APP_VERSION) + " - boupbeep version");
 
     ui->accountsListWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->accountsListWidget, &QListWidget::customContextMenuRequested, this, &MainWindow::showContextMenu);
