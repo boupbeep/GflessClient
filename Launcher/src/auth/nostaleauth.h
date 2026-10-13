@@ -49,6 +49,13 @@ public:
     bool createGameAccount(const QString& email, const QString& name, const QString& gfLang, QJsonObject& response);
 
     QString getInstallationId() const;
+    void setInstallationId(const QString& id);
+
+    void setProxyIp(const QString& ip);
+    void setSocksPort(const QString& port);
+    void setProxyUsername(const QString& username);
+    void setProxyPassword(const QString& password);
+    void setUseProxy(bool use);
 
     void setOtpCode(const QString &newOtpCode);
 
@@ -103,6 +110,8 @@ private:
     QSslConfiguration getCustomSslConfig(const QSslConfiguration &config) const;
 
     void generateGameSessionId();
+
+    void applyProxySettings();
 
     const QString commitId = "eda2b413";
     const QString gameId = "dd4e22d6-00d1-44b9-8126-d8b40e0cd7c9";

@@ -28,20 +28,7 @@ NostaleAuth::NostaleAuth(const QString &identityPath, const QString& installatio
 
     networkManager = new SyncNetworAccesskManager(this);
 
-    if (useProxy) {
-        QNetworkProxy proxy(
-            QNetworkProxy::ProxyType::Socks5Proxy,
-            proxyIp,
-            socksPort.toUInt()
-        );
-
-        if (!proxyUsername.isEmpty()) {
-            proxy.setUser(proxyUsername);
-            proxy.setPassword(proxyPassword);
-        }
-
-        networkManager->setProxy(proxy);
-    }
+    applyProxySettings();
 
     initGfVersion();
     initCert();
@@ -724,6 +711,11 @@ QString NostaleAuth::getInstallationId() const
     return installationId;
 }
 
+void NostaleAuth::setInstallationId(const QString &id)
+{
+    installationId = id;
+}
+
 void NostaleAuth::setOtpCode(const QString &newOtpCode)
 {
     otpCode = newOtpCode;
@@ -794,4 +786,55 @@ QString NostaleAuth::getSocksPort() const
 bool NostaleAuth::getUseProxy() const
 {
     return useProxy;
+}
+
+void NostaleAuth::setProxyIp(const QString &ip)
+{
+    proxyIp = ip;
+    applyProxySettings();
+}
+
+void NostaleAuth::setSocksPort(const QString &port)
+{
+    socksPort = port;
+    applyProxySettings();
+}
+
+void NostaleAuth::setProxyUsername(const QString &username)
+{
+    proxyUsername = username;
+    applyProxySettings();
+}
+
+void NostaleAuth::setProxyPassword(const QString &password)
+{
+    proxyPassword = password;
+    applyProxySettings();
+}
+
+void NostaleAuth::setUseProxy(bool use)
+{
+    useProxy = use;
+    applyProxySettings();
+}
+
+void NostaleAuth::applyProxySettings()
+{
+    if (!useProxy) {
+        networkManager->setProxy(QNetworkProxy());
+        return;
+    }
+
+    QNetworkProxy proxy(
+        QNetworkProxy::ProxyType::Socks5Proxy,
+        proxyIp,
+        socksPort.toUInt()
+    );
+
+    if (!proxyUsername.isEmpty()) {
+        proxy.setUser(proxyUsername);
+        proxy.setPassword(proxyPassword);
+    }
+
+    networkManager->setProxy(proxy);
 }

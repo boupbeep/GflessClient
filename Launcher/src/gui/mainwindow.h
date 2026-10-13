@@ -47,6 +47,8 @@ private slots:
 
     void on_removeGameforgeAccountButton_clicked();
 
+    void on_editGameforgeAccountButton_clicked();
+
     void on_gameSettingsButton_clicked();
 
     void on_actionSettings_triggered();
@@ -86,6 +88,7 @@ private slots:
 private:
     void updateGamePaths(const QStringList& gameDirs, GameUpdateManagerDialog* managerDialog);
     QStringList collectAllGameDirs() const;
+    bool reauthenticateGameforgeAccount(GameforgeAccount* acc);
     void openAccount(const Profile* profile, QQueue<int> accountIndexes);
     void createTrayIcon();
     bool checkGameClientPath();

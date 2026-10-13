@@ -49,6 +49,26 @@ void GameforgeAccount::setToken(const QString &token)
     auth->setToken(token);
 }
 
+void GameforgeAccount::setEmail(const QString &email)
+{
+    this->email = email;
+}
+
+void GameforgeAccount::setPassword(const QString &password)
+{
+    this->password = password;
+}
+
+void GameforgeAccount::setIdentityPath(const QString &path)
+{
+    identityPath = path;
+}
+
+void GameforgeAccount::setCustomClientPath(const QString &path)
+{
+    customClientPath = path;
+}
+
 const QMap<QString, QString> &GameforgeAccount::getGameAccounts() const
 {
     return gameAccounts;
@@ -79,7 +99,7 @@ QString GameforgeAccount::getIdentityPath() const
     return identityPath;
 }
 
-const NostaleAuth *GameforgeAccount::getAuth() const
+NostaleAuth *GameforgeAccount::getAuth() const
 {
     return auth;
 }

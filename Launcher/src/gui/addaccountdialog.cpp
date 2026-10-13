@@ -155,3 +155,36 @@ QString AddAccountDialog::getInstallationId() const
     return installationId;
 }
 
+void AddAccountDialog::prefillForEdit(const QString &prefillEmail, const QString &prefillPassword,
+                                       const QString &prefillIdentityPath, const QString &prefillCustomClientPath,
+                                       const QString &prefillInstallationId, bool prefillUseProxy,
+                                       const QString &prefillProxyIp, const QString &prefillSocksPort,
+                                       const QString &prefillProxyUsername, const QString &prefillProxyPassword)
+{
+    editMode = true;
+
+    ui->emailLineEdit->setText(prefillEmail);
+    ui->passwordLineEdit->setText(prefillPassword);
+    ui->identityPathLineEdit->setText(prefillIdentityPath);
+    ui->customGamePathLineEdit->setText(prefillCustomClientPath);
+    ui->installationIdLineEdit->setText(prefillInstallationId);
+
+    ui->proxyCheckBox->setChecked(prefillUseProxy);
+    ui->proxyIpLabel->setEnabled(prefillUseProxy);
+    ui->proxyIpLineEdit->setEnabled(prefillUseProxy);
+    ui->socksPortLabel->setEnabled(prefillUseProxy);
+    ui->socksPortLineEdit->setEnabled(prefillUseProxy);
+    ui->proxyUsernameLabel->setEnabled(prefillUseProxy);
+    ui->proxyUsernameLineEdit->setEnabled(prefillUseProxy);
+    ui->proxyPasswordLabel->setEnabled(prefillUseProxy);
+    ui->proxyPasswordLineEdit->setEnabled(prefillUseProxy);
+
+    ui->proxyIpLineEdit->setText(prefillProxyIp);
+    ui->socksPortLineEdit->setText(prefillSocksPort);
+    ui->proxyUsernameLineEdit->setText(prefillProxyUsername);
+    ui->proxyPasswordLineEdit->setText(prefillProxyPassword);
+
+    ui->loginButton->setText("Save");
+    setWindowTitle("Edit Gameforge account");
+}
+

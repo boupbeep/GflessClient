@@ -530,6 +530,126 @@ void MainWindow::on_removeGameforgeAccountButton_clicked()
     displayProfile(ui->profileComboBox->currentIndex());
 }
 
+void MainWindow::on_editGameforgeAccountButton_clicked()
+{
+    int index = ui->gameforgeAccountComboBox->currentIndex();
+
+    if (index < 0 || index >= gfAccounts.size())
+        return;
+
+    GameforgeAccount* acc = gfAccounts[index];
+    NostaleAuth* auth = acc->getAuth();
+
+    QString oldEmail = acc->getEmail();
+    QString oldPassword = acc->getPassword();
+
+    AddAccountDialog dialog(this);
+    dialog.prefillForEdit(
+        acc->getEmail(),
+        acc->getPassword(),
+        acc->getIdentityPath(),
+        acc->getcustomClientPath(),
+        auth->getInstallationId(),
+        auth->getUseProxy(),
+        auth->getProxyIp(),
+        auth->getSocksPort(),
+        auth->getProxyUsername(),
+        auth->getProxyPassword()
+    );
+
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    acc->setEmail(dialog.getEmail());
+    acc->setPassword(dialog.getPassword());
+    acc->setIdentityPath(dialog.getIdentityPath());
+    acc->setCustomClientPath(dialog.getCustomClientPath());
+
+    auth->setInstallationId(dialog.getInstallationId());
+    auth->setUseProxy(dialog.getUseProxy());
+    auth->setProxyIp(dialog.getProxyIp());
+    auth->setSocksPort(dialog.getSocksPort());
+    auth->setProxyUsername(dialog.getProxyUsername());
+    auth->setProxyPassword(dialog.getProxyPassword());
+
+    ui->gameforgeAccountComboBox->setItemText(index, dialog.getEmail());
+
+    if (dialog.getEmail() != oldEmail || dialog.getPassword() != oldPassword) {
+        auth->setToken("");
+        reauthenticateGameforgeAccount(acc);
+    }
+
+    saveSettings();
+}
+
+bool MainWindow::reauthenticateGameforgeAccount(GameforgeAccount *acc)
+{
+    while (true) {
+        bool captcha = false;
+        bool wrongCredentials = false;
+        QString gfChallengeId;
+
+        if (acc->authenticate(captcha, gfChallengeId, wrongCredentials)) {
+            return true;
+        }
+
+        if (captcha) {
+            SyncNetworAccesskManager* netManager = acc->getAuth()->getNetworkManager();
+
+            QJsonObject captchaInfo = CaptchaSolver::getCaptchaInfo(gfChallengeId, netManager);
+            QString type = captchaInfo.value("type").toString();
+            QString script = captchaInfo.value("script").toString();
+
+            if (type == "gf-image-drop-captcha") {
+                CaptchaDialog captchaDialog(gfChallengeId, netManager, this);
+                int res = captchaDialog.exec();
+
+                if (res == QDialog::Accepted) {
+                    continue;
+                }
+            }
+            else if (type == "gf-pow-captcha") {
+                QMessageBox::warning(
+                    this,
+                    "Unsupported type of captcha",
+                    "The type of captcha you received is not supported\nYou need to resolve it using the gameforge client or your browser."
+                );
+            }
+            else {
+                QMessageBox::critical(
+                    this,
+                    "Unsupported type of captcha",
+                    "Unsupported type of captcha\n\nType: " + type + "\nScript: " + script
+                        + "\n\nYou need to resolve it using the gameforge client or your browser."
+                );
+            }
+
+            return false;
+        }
+
+        if (acc->getOtpRequired()) {
+            OtpDialog otpDialog(this);
+            int res = otpDialog.exec();
+
+            if (res == QDialog::Accepted) {
+                acc->setOtpCode(otpDialog.getOtpCode());
+                continue;
+            }
+
+            return false;
+        }
+
+        if (wrongCredentials) {
+            QMessageBox::critical(this, "Error", "Incorrect username or password");
+        }
+        else {
+            QMessageBox::critical(this, "Error", "Authentication failed");
+        }
+
+        return false;
+    }
+}
+
 
 void MainWindow::on_gameSettingsButton_clicked()
 {
@@ -961,6 +1081,8 @@ void MainWindow::on_openAccountsButton_clicked()
 
 void MainWindow::on_gameforgeAccountComboBox_currentIndexChanged(int index)
 {
+    ui->editGameforgeAccountButton->setEnabled(index >= 0 && index < gfAccounts.size());
+
     if (index < 0)
         return;
 

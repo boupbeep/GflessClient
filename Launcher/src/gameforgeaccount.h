@@ -29,6 +29,11 @@ public:
 
     void setToken(const QString& token);
 
+    void setEmail(const QString& email);
+    void setPassword(const QString& password);
+    void setIdentityPath(const QString& path);
+    void setCustomClientPath(const QString& path);
+
     const QMap<QString, QString>& getGameAccounts() const;
 
     void updateGameAccounts();
@@ -40,7 +45,7 @@ public:
 
     QString getIdentityPath() const;
 
-    const NostaleAuth *getAuth() const;
+    NostaleAuth *getAuth() const;
 
     QString getcustomClientPath() const;
 

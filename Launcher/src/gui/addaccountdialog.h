@@ -34,6 +34,12 @@ public:
 
     QString getInstallationId() const;
 
+    void prefillForEdit(const QString& email, const QString& password,
+                        const QString& identityPath, const QString& customClientPath,
+                        const QString& installationId, bool useProxy,
+                        const QString& proxyIp, const QString& socksPort,
+                        const QString& proxyUsername, const QString& proxyPassword);
+
 private slots:
     void on_showPasswordCheckBox_stateChanged(int arg1);
 
@@ -61,6 +67,7 @@ private:
     QString customClientPath;
     QString installationId;
     bool useProxy;
+    bool editMode = false;
 };
 
 #endif // ADDACCOUNTDIALOG_H
