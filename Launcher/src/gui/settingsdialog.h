@@ -3,6 +3,10 @@
 
 #include <QDialog>
 #include <QFileDialog>
+#include <QStringList>
+#include <QVector>
+
+#include "gameforgeaccount.h"
 
 namespace Ui {
 class SettingsDialog;
@@ -30,7 +34,9 @@ public:
 
     QString getProfilesPath() const;
 
-    int getOpenInterval() const;
+    int getOpenIntervalMin() const;
+
+    int getOpenIntervalMax() const;
 
     int getGameLanguage() const;
 
@@ -42,7 +48,9 @@ public:
 
     void setProfilesPath(const QString& path);
 
-    void setOpenInterval(int n);
+    void setOpenIntervalMin(int n);
+
+    void setOpenIntervalMax(int n);
 
     void setGameLanguage(int language);
 
@@ -60,8 +68,16 @@ public:
 
     bool getCheckUpdates() const;
 
+    QStringList getSelectedGamePaths() const;
+
+    void populateGamePaths(const QStringList& paths);
+
+    void setGameforgeAccounts(const QVector<GameforgeAccount*>& accounts);
+
 signals:
     void profilesPathSelected(QString);
+
+    void updateRequested(const QStringList& paths);
 
 private slots:
     void on_selectGamePathButton_clicked();
@@ -70,10 +86,22 @@ private slots:
 
     void on_themeComboBox_currentIndexChanged(int index);
 
+    void on_openIntervalMinSpinBox_valueChanged(int value);
+
+    void on_openIntervalMaxSpinBox_valueChanged(int value);
+
+    void on_refreshPathsButton_clicked();
+
+    void on_updateSelectedButton_clicked();
+
+    void on_selectAllCheckBox_toggled(bool checked);
+
 private:
     void initLanguageComboBox();
+    QStringList collectGamePaths() const;
 
     Ui::SettingsDialog *ui;
+    QVector<GameforgeAccount*> gfAccounts;
 };
 
 

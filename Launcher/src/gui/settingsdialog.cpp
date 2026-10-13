@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QFile>
 #include <QStyleFactory>
+#include <QListWidgetItem>
 
 #include <array>
 
@@ -131,9 +132,14 @@ QString SettingsDialog::getProfilesPath() const
     return ui->profilesPathLineEdit->text();
 }
 
-int SettingsDialog::getOpenInterval() const
+int SettingsDialog::getOpenIntervalMin() const
 {
-    return ui->openIntervalSpinBox->value();
+    return ui->openIntervalMinSpinBox->value();
+}
+
+int SettingsDialog::getOpenIntervalMax() const
+{
+    return ui->openIntervalMaxSpinBox->value();
 }
 
 int SettingsDialog::getGameLanguage() const
@@ -161,9 +167,14 @@ void SettingsDialog::setProfilesPath(const QString &path)
     ui->profilesPathLineEdit->setText(path);
 }
 
-void SettingsDialog::setOpenInterval(int n)
+void SettingsDialog::setOpenIntervalMin(int n)
 {
-    ui->openIntervalSpinBox->setValue(n);
+    ui->openIntervalMinSpinBox->setValue(n);
+}
+
+void SettingsDialog::setOpenIntervalMax(int n)
+{
+    ui->openIntervalMaxSpinBox->setValue(n);
 }
 
 void SettingsDialog::setGameLanguage(int language)
@@ -257,4 +268,92 @@ void SettingsDialog::on_selectProfilePathButton_clicked()
 void SettingsDialog::on_themeComboBox_currentIndexChanged(int index)
 {
     setTheme(index);
+}
+
+void SettingsDialog::on_openIntervalMinSpinBox_valueChanged(int value)
+{
+    if (value > ui->openIntervalMaxSpinBox->value())
+        ui->openIntervalMaxSpinBox->setValue(value);
+}
+
+void SettingsDialog::on_openIntervalMaxSpinBox_valueChanged(int value)
+{
+    if (value < ui->openIntervalMinSpinBox->value())
+        ui->openIntervalMinSpinBox->setValue(value);
+}
+
+QStringList SettingsDialog::collectGamePaths() const
+{
+    QStringList paths;
+
+    QString globalPath = getGameClientPath();
+    if (!globalPath.isEmpty()) {
+        QString dir = globalPath.left(globalPath.lastIndexOf("/"));
+
+        if (!dir.isEmpty() && !paths.contains(dir, Qt::CaseInsensitive))
+            paths.append(dir);
+    }
+
+    for (GameforgeAccount* acc : gfAccounts) {
+        QString customPath = acc->getcustomClientPath();
+
+        if (customPath.isEmpty())
+            continue;
+
+        QString dir = customPath.left(customPath.lastIndexOf("/"));
+
+        if (!dir.isEmpty() && !paths.contains(dir, Qt::CaseInsensitive))
+            paths.append(dir);
+    }
+
+    return paths;
+}
+
+void SettingsDialog::populateGamePaths(const QStringList &paths)
+{
+    ui->gamePathsListWidget->clear();
+
+    for (const QString& path : paths) {
+        QListWidgetItem* item = new QListWidgetItem(path, ui->gamePathsListWidget);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Checked);
+    }
+}
+
+void SettingsDialog::setGameforgeAccounts(const QVector<GameforgeAccount *> &accounts)
+{
+    gfAccounts = accounts;
+    populateGamePaths(collectGamePaths());
+}
+
+QStringList SettingsDialog::getSelectedGamePaths() const
+{
+    QStringList paths;
+
+    for (int i = 0; i < ui->gamePathsListWidget->count(); ++i) {
+        QListWidgetItem* item = ui->gamePathsListWidget->item(i);
+
+        if (item->checkState() == Qt::Checked)
+            paths.append(item->text());
+    }
+
+    return paths;
+}
+
+void SettingsDialog::on_refreshPathsButton_clicked()
+{
+    populateGamePaths(collectGamePaths());
+}
+
+void SettingsDialog::on_updateSelectedButton_clicked()
+{
+    emit updateRequested(getSelectedGamePaths());
+}
+
+void SettingsDialog::on_selectAllCheckBox_toggled(bool checked)
+{
+    for (int i = 0; i < ui->gamePathsListWidget->count(); ++i) {
+        QListWidgetItem* item = ui->gamePathsListWidget->item(i);
+        item->setCheckState(checked ? Qt::Checked : Qt::Unchecked);
+    }
 }

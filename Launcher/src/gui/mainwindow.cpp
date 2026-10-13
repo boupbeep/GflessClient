@@ -9,6 +9,7 @@
 #include "creategameaccountdialog.h"
 #include "otpdialog.h"
 #include <QQueue>
+#include <QRandomGenerator>
 #include "ui_mainwindow.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -28,13 +29,16 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->accountsListWidget, &QListWidget::customContextMenuRequested, this, &MainWindow::showContextMenu);
     connect(gflessServer, &QLocalServer::newConnection, this, &MainWindow::handleLocalConnection);
     connect(settingsDialog, &SettingsDialog::profilesPathSelected, this, &MainWindow::loadAccountProfiles);
+    connect(settingsDialog, &SettingsDialog::updateRequested, this, &MainWindow::updateGames);
 
     setupDefaultProfile();
     loadSettings();
     loadAccountProfiles(settingsDialog->getProfilesPath());
 
-    if (settingsDialog->getCheckUpdates())
-        updateGame();
+    if (settingsDialog->getCheckUpdates()) {
+        settingsDialog->setGameforgeAccounts(gfAccounts);
+        updateGames(settingsDialog->getSelectedGamePaths());
+    }
 }
 
 MainWindow::~MainWindow()
@@ -50,7 +54,8 @@ void MainWindow::loadSettings()
     restoreGeometry(settings.value("geometry").toByteArray());
     settingsDialog->setGameClientPath(settings.value("nostale path").toString());
     settingsDialog->setProfilesPath(settings.value("profiles path").toString());
-    settingsDialog->setOpenInterval(settings.value("open interval", 10).toInt());
+    settingsDialog->setOpenIntervalMin(settings.value("open interval min", 8).toInt());
+    settingsDialog->setOpenIntervalMax(settings.value("open interval max", 15).toInt());
     settingsDialog->setGameLanguage(settings.value("game language", 0).toInt());
     settingsDialog->setTheme(settings.value("theme", ThemeDefault).toInt());
     settingsDialog->setThemeComboBox(settings.value("theme", ThemeDefault).toInt());
@@ -103,7 +108,8 @@ void MainWindow::saveSettings()
     settings.setValue("geometry", saveGeometry());
     settings.setValue("nostale path", settingsDialog->getGameClientPath());
     settings.setValue("profiles path", settingsDialog->getProfilesPath());
-    settings.setValue("open interval", settingsDialog->getOpenInterval());
+    settings.setValue("open interval min", settingsDialog->getOpenIntervalMin());
+    settings.setValue("open interval max", settingsDialog->getOpenIntervalMax());
     settings.setValue("game language", settingsDialog->getGameLanguageIndex());
     settings.setValue("theme", settingsDialog->getTheme());
     settings.setValue("disable_nosmall", settingsDialog->getDisabledNosmall());
@@ -403,19 +409,17 @@ void MainWindow::displayProfile(int index)
     }
 }
 
-void MainWindow::updateGame()
+void MainWindow::updateGames(const QStringList &gameDirs)
 {
-    QString gameDir = settingsDialog->getGameClientPath();
+    for (const QString& gameDir : gameDirs) {
+        if (gameDir.isEmpty())
+            continue;
 
-    if (gameDir.isEmpty())
-        return;
+        GameUpdater updater(gfAccounts, gameDir, this);
 
-    gameDir = gameDir.left(gameDir.lastIndexOf("/"));
-
-    GameUpdater updater(gfAccounts, gameDir, this);
-
-    GameUpdateDialog updateDialog(&updater, this);
-    updateDialog.exec();
+        GameUpdateDialog updateDialog(&updater, this);
+        updateDialog.exec();
+    }
 }
 
 void MainWindow::createTrayIcon()
@@ -513,6 +517,7 @@ bool MainWindow::checkGameClientPath()
 
 void MainWindow::on_actionSettings_triggered()
 {
+    settingsDialog->setGameforgeAccounts(gfAccounts);
     settingsDialog->exec();
 }
 
@@ -895,7 +900,6 @@ void MainWindow::on_openAccountsButton_clicked()
     if (!checkGameClientPath())
         return;
 
-    int openInterval = settingsDialog->getOpenInterval();
     Profile* profile = profiles[ui->profileComboBox->currentIndex()];
     GameAccount gameAccount;
     QString gamePath = settingsDialog->getGameClientPath();
@@ -958,11 +962,6 @@ void MainWindow::on_createGameAccButton_clicked()
 }
 
 
-void MainWindow::on_repairButton_clicked()
-{
-    updateGame();
-}
-
 void MainWindow::openAccount(const Profile *profile, QQueue<int> accountIndexes)
 {
     if (accountIndexes.empty()) {
@@ -972,7 +971,15 @@ void MainWindow::openAccount(const Profile *profile, QQueue<int> accountIndexes)
     int row = accountIndexes.front();
     accountIndexes.pop_front();
 
-    int openInterval = settingsDialog->getOpenInterval();
+    int minInterval = settingsDialog->getOpenIntervalMin();
+    int maxInterval = settingsDialog->getOpenIntervalMax();
+    int openInterval;
+
+    if (minInterval >= maxInterval)
+        openInterval = minInterval;
+    else
+        openInterval = QRandomGenerator::global()->bounded(minInterval, maxInterval + 1);
+
     QString gamePath = settingsDialog->getGameClientPath();
     int gameLang = settingsDialog->getGameLanguage();
 

@@ -22,6 +22,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <QVector>
+#include <QStringList>
 
 
 QT_BEGIN_NAMESPACE
@@ -76,7 +77,7 @@ private slots:
 
     void on_createGameAccButton_clicked();
 
-    void on_repairButton_clicked();
+    void updateGames(const QStringList& gameDirs);
 
 private:
     void openAccount(const Profile* profile, QQueue<int> accountIndexes);
@@ -118,8 +119,6 @@ private:
 
     void removeAccountsFromDefaultProfile(const QString& email);
     void displayProfile(int index);
-
-    void updateGame();
 
     Ui::MainWindow *ui;
     SettingsDialog* settingsDialog;
