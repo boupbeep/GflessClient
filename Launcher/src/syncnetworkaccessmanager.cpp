@@ -53,7 +53,8 @@ QNetworkReply *SyncNetworAccesskManager::sendCustomRequest(const QNetworkRequest
 
 void SyncNetworAccesskManager::handleReplyError(QNetworkReply *reply)
 {
-    qDebug() << "Error code:" << reply->error();
+    qWarning() << "[NET] Request failed:" << reply->url().toString()
+               << "Error:" << reply->error() << reply->errorString();
     QString err = reply->errorString();
     QMessageBox::critical(nullptr, "Error", err);
 }

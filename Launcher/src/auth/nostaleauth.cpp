@@ -78,6 +78,8 @@ QByteArray decompressGzip(const QByteArray &data) {
 
 QMap<QString, QString> NostaleAuth::getAccounts()
 {
+    qInfo() << "[ACCOUNTS] Fetching game accounts...";
+
     if (!getUserInformation()) {
         return {};
     }
@@ -104,8 +106,10 @@ QMap<QString, QString> NostaleAuth::getAccounts()
 
     reply = networkManager->get(request);
 
-    if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200)
+    if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200) {
+        qWarning() << "[ACCOUNTS] Failed: HTTP" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         return {};
+    }
 
     QByteArray replyContent = reply->readAll();
     jsonResponse = QJsonDocument::fromJson(replyContent).object();
@@ -123,6 +127,8 @@ QMap<QString, QString> NostaleAuth::getAccounts()
 
     reply->deleteLater();
 
+    qInfo() << "[ACCOUNTS] Found" << accounts.size() << "NosTale accounts";
+
     return accounts;
 }
 
@@ -132,6 +138,8 @@ bool NostaleAuth::authenticate(const QString &email, const QString &password, bo
     QNetworkRequest request(
         QUrl("https://spark.gameforge.com/api/v2/authProviders/credentials/sessions"));
     QNetworkReply* reply = nullptr;
+
+    qInfo() << "[AUTH] Authenticating" << email;
 
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("User-Agent", browserUserAgent.toUtf8());
@@ -158,38 +166,47 @@ bool NostaleAuth::authenticate(const QString &email, const QString &password, bo
 
     qDebug() << jsonResponse;
 
-    if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 201)
+    int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    qInfo() << "[AUTH] HTTP" << statusCode << "for authenticate";
+
+    if (statusCode != 201)
     {
         QJsonArray errorTypes = jsonResponse["errorTypes"].toArray();
 
         if (errorTypes.contains("OTP_REQUIRED")) {
+            qInfo() << "[AUTH] OTP required";
             otpRequired = true;
             return false;
         }
 
-        if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 409) // Conflict Captcha or incorrect username or password
+        if (statusCode == 409) // Conflict Captcha or incorrect username or password
         {
             if (errorTypes.contains("CHALLENGE_REQUIRED")) {
+                qInfo() << "[AUTH] Captcha challenge required";
                 gfChallengeId = reply->rawHeader("gf-challenge-id").split(';').first();
                 captcha = true;
                 return false;
             }
 
             if (errorTypes.contains("CREDENTIALS_INVALID")) {
+                qWarning() << "[AUTH] Invalid credentials for" << email;
                 wrongCredentials = true;
                 return false;
             }
 
+            qWarning() << "[AUTH] Authentication failed, HTTP" << statusCode << "response:" << QJsonDocument(jsonResponse).toJson(QJsonDocument::Compact).left(200);
             return false;
 
         }
-        else if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 403) // Incorrect username or password
+        else if (statusCode == 403) // Incorrect username or password
         {
+            qWarning() << "[AUTH] Invalid credentials for" << email;
             wrongCredentials = true;
             return false;
         }
         else
         {
+            qWarning() << "[AUTH] Authentication failed, HTTP" << statusCode << "response:" << QJsonDocument(jsonResponse).toJson(QJsonDocument::Compact).left(200);
             return false;
         }
     }
@@ -197,6 +214,8 @@ bool NostaleAuth::authenticate(const QString &email, const QString &password, bo
     token = jsonResponse["token"].toString();
     otpCode.clear();
     otpRequired = false;
+
+    qInfo() << "[AUTH] Authentication successful, token:" << token.left(8) + "...";
 
     return true;
 }
@@ -207,11 +226,19 @@ QString NostaleAuth::getToken(const QString &accountId)
         return {};
     }
 
+    qInfo() << "[TOKEN] Getting token for account" << accountId;
+
     generateGameSessionId();
 
+    qInfo() << "[TOKEN] Game session ID:" << gameSessionId;
+    qInfo() << "[TOKEN] Sending iovation...";
+
     if (!sendIovation(accountId)) {
+        qWarning() << "[TOKEN] Iovation failed for account" << accountId;
         return {};
     }
+
+    qInfo() << "[TOKEN] Waiting 1s before thin/codes...";
 
     // This sleep is a MUST, otherwise the request to thin/codes will fail
     QThread::sleep(std::chrono::seconds(1));
@@ -224,7 +251,16 @@ QString NostaleAuth::getToken(const QString &accountId)
     //     return {};
     // }
 
-    return sendThinCodes(accountId);
+    qInfo() << "[TOKEN] Sending thin/codes...";
+
+    QString code = sendThinCodes(accountId);
+
+    if (code.isEmpty())
+        qWarning() << "[TOKEN] thin/codes returned empty code";
+    else
+        qInfo() << "[TOKEN] Got game code:" << code.left(8) + "..." << "(length:" << code.length() << ")";
+
+    return code;
 }
 
 QChar NostaleAuth::getFirstNumber(QString uuid)
@@ -275,14 +311,18 @@ bool NostaleAuth::getUserInformation()
     if (token.isEmpty())
         return false;
 
+    qInfo() << "[USER] GET /user/me";
+
     request.setRawHeader("User-Agent", browserUserAgent.toUtf8());
     request.setRawHeader("TNT-Installation-Id", installationId.toUtf8());
     request.setRawHeader("Authorization", "Bearer " + token.toUtf8());
 
     reply = networkManager->get(request);
 
-    if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200)
+    if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200) {
+        qWarning() << "[USER] Failed: HTTP" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         return false;
+    }
 
     QByteArray replyContent = reply->readAll();
     jsonResponse = QJsonDocument::fromJson(replyContent).object();
@@ -290,6 +330,8 @@ bool NostaleAuth::getUserInformation()
     this->gfAccountId = jsonResponse["id"].toString();
     this->locale = jsonResponse["locale"].toString();
     this->email = jsonResponse["email"].toString();
+
+    qInfo() << "[USER] Account ID:" << gfAccountId << "locale:" << locale;
 
     return true;
 }
@@ -469,6 +511,8 @@ bool NostaleAuth::sendIovation(const QString& accountId)
     request.setRawHeader("TNT-Installation-Id", installationId.toLocal8Bit());
     request.setRawHeader("Authorization", "Bearer " + token.toLocal8Bit());
 
+    qInfo() << "[IOVATION] POST /auth/iovation for account" << accountId;
+
     content["accountId"] = accountId;
     content["blackbox"] = createBlackbox();
     content["type"] = "play_now";
@@ -483,13 +527,22 @@ bool NostaleAuth::sendIovation(const QString& accountId)
 
     qDebug() << "NostaleAuth::sendIovation" << response;
 
-    if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200)
+    int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    qInfo() << "[IOVATION] HTTP" << statusCode;
+
+    if (statusCode != 200) {
+        qWarning() << "[IOVATION] Failed: HTTP" << statusCode << "response:" << response.left(500);
         return false;
+    }
 
     jsonResponse = QJsonDocument::fromJson(response).object();
 
-    if (jsonResponse["status"] != "ok")
+    if (jsonResponse["status"] != "ok") {
+        qWarning() << "[IOVATION] Status not ok:" << jsonResponse["status"];
         return false;
+    }
+
+    qInfo() << "[IOVATION] Success";
 
     return true;
 }
@@ -505,6 +558,8 @@ QString NostaleAuth::sendThinCodes(const QString &accountId)
     request.setRawHeader("Authorization", "Bearer " + token.toLocal8Bit());
     request.setRawHeader("tnt-installation-id", installationId.toLocal8Bit());
 
+    qInfo() << "[THINCODES] POST /auth/thin/codes for account" << accountId;
+
     QString gsid = gameSessionId + "-" + QString::number(QRandomGenerator::global()->bounded(1000, 9999));
 
     content["platformGameAccountId"] = accountId;
@@ -516,10 +571,15 @@ QString NostaleAuth::sendThinCodes(const QString &accountId)
 
     QByteArray response = reply->readAll();
 
-    qDebug() << "NostaleAuth::getToken" << response;
+    qDebug() << "[THINCODES]" << response;
 
-    if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 201)
+    int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    qInfo() << "[THINCODES] HTTP" << statusCode;
+
+    if (statusCode != 201) {
+        qWarning() << "[THINCODES] Failed: HTTP" << statusCode << "response:" << response.left(500);
         return {};
+    }
 
     jsonResponse = QJsonDocument::fromJson(response).object();
 
@@ -555,6 +615,7 @@ bool NostaleAuth::sendIovationOptions()
 void NostaleAuth::initInstallationId()
 {
     if (!installationId.isEmpty()) {
+        qInfo() << "[INIT] Installation ID:" << installationId.left(8) + "...";
         return;
     }
 
@@ -574,6 +635,11 @@ void NostaleAuth::initInstallationId()
         if (installationId.isEmpty())
             qDebug() << "Couldn't find InstallationId";
     }
+
+    if (installationId.isEmpty())
+        qWarning() << "[INIT] Installation ID not found in registry";
+    else
+        qInfo() << "[INIT] Installation ID:" << installationId.left(8) + "...";
 }
 
 void NostaleAuth::initCert()
@@ -623,13 +689,17 @@ void NostaleAuth::initGfVersion()
     QNetworkRequest request(QUrl("http://dl.tnt.gameforge.com/tnt/final-ms3/clientversioninfo.json"));
     QNetworkReply* reply = nullptr;
 
+    qInfo() << "[INIT] Fetching GF version info...";
+
     reply = networkManager->get(request);
     reply->deleteLater();
 
     QByteArray response = reply->readAll();
 
-    if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200)
+    if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200) {
+        qWarning() << "[INIT] Failed to fetch version info: HTTP" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         return;
+    }
 
     jsonResponse = QJsonDocument::fromJson(response).object();
 
@@ -637,31 +707,51 @@ void NostaleAuth::initGfVersion()
     this->version = jsonResponse["version"].toString();
     this->gameforgeVersion = jsonResponse["minimumVersionForDelayedUpdate"].toString();
     this->frontendVersion = jsonResponse["frontend"].toObject()["version"].toString();
+
+    qInfo() << "[INIT] GF version:" << gameforgeVersion << "Chrome:" << chromeVersion;
 }
 
 QString NostaleAuth::createBlackbox()
 {
+    qInfo() << "[BLACKBOX] Creating blackbox (identity:" << (identity ? "identity file" : "generator") << ")";
+
+    QString result;
+
     if (identity == nullptr) {
-        return BlackboxGenerator::generate();
+        result = BlackboxGenerator::generate();
     }
     else {
         identity->update();
         BlackBox blackbox(identity, QJsonValue::Null);
-        return blackbox.encoded();
+        result = blackbox.encoded();
     }
+
+    if (result.isEmpty())
+        qWarning() << "[BLACKBOX] Blackbox is empty!";
+
+    return result;
 }
 
 QString NostaleAuth::createEncryptedBlackbox(const QString& gsid, const QString& installationId, const QString& accountId)
 {
+    qInfo() << "[BLACKBOX] Creating blackbox (identity:" << (identity ? "identity file" : "generator") << ")";
+
+    QString result;
+
     if (identity == nullptr) {
         QString blackbox = BlackboxGenerator::generate(gsid, installationId);
-        return BlackboxGenerator::encrypt(blackbox.toLocal8Bit(), gsid, accountId);
+        result = BlackboxGenerator::encrypt(blackbox.toLocal8Bit(), gsid, accountId);
     }
     else {
         identity->update();
         EncryptedBlackBox blackbox(identity, accountId, gsid, installationId);
-        return blackbox.encrypted();
+        result = blackbox.encrypted();
     }
+
+    if (result.isEmpty())
+        qWarning() << "[BLACKBOX] Blackbox is empty!";
+
+    return result;
 }
 
 QSslConfiguration NostaleAuth::getCustomSslConfig(const QSslConfiguration &config) const

@@ -43,15 +43,22 @@ bool GflessClient::openClient(const QString& displayName, const QString& token, 
         procInfo = args->processInformation;
     });
 
+    qInfo() << "[CLIENT] Creating process:" << gameClientPath;
+    qInfo() << "[CLIENT] Session ID env:" << env.value("_TNT_SESSION_ID");
+
     if (!process.startDetached(&pid))
     {
-        qDebug() << "Error creating process";
+        qWarning() << "[CLIENT] Error creating process:" << process.errorString();
         return false;
     }
+
+    qInfo() << "[CLIENT] Process created, PID:" << pid;
 
     threadId = procInfo->dwThreadId;
 
     QString dllPath = QDir::currentPath() + "/GflessDLL.dll";
+
+    qInfo() << "[CLIENT] Injecting DLL:" << dllPath;
 
     if (!injectDll(pid, dllPath))
         qDebug() << "Dll injection failed";
@@ -63,18 +70,20 @@ bool GflessClient::openClient(const QString& displayName, const QString& token, 
 
     if (hThread == NULL)
     {
-        qDebug() << "Error on OpenThread:" << GetLastError();
+        qWarning() << "[CLIENT] Error on OpenThread:" << GetLastError();
         return false;
     }
 
     if (ResumeThread(hThread) == -1) {
-        qDebug() << "Error on ResumeThread:" << GetLastError();
+        qWarning() << "[CLIENT] ResumeThread failed, error:" << GetLastError();
         CloseHandle(hThread);
         return false;
     }
 
     CloseHandle(hThread);
     createdPID = pid;
+
+    qInfo() << "[CLIENT] Game launched successfully";
 
     return true;
 }
@@ -105,6 +114,7 @@ void GflessClient::handlePipe()
     QString method = json["method"].toString();
 
     qDebug() << QJsonDocument(json).toJson();
+    qInfo() << "[PIPE] Received:" << method;
 
     if (method == "ClientLibrary.isClientRunning")
         output = prepareResponse(json, "true");
@@ -112,8 +122,10 @@ void GflessClient::handlePipe()
     else if  (method == "ClientLibrary.initSession")
         output = prepareResponse(json, json["params"].toObject()["sessionId"].toString().toUtf8());
 
-    else if (method == "ClientLibrary.queryAuthorizationCode")
+    else if (method == "ClientLibrary.queryAuthorizationCode") {
+        qInfo() << "[PIPE] Responding to queryAuthorizationCode for" << displayName;
         output = prepareResponse(json, token.toUtf8());
+    }
 
     else if (method == "ClientLibrary.queryGameAccountName")
         output = prepareResponse(json, displayName.toUtf8());
@@ -142,6 +154,7 @@ bool GflessClient::injectDll(DWORD pid, const QString &dllPath)
     arguments << QString::number(pid) << dllPath;
 
     if (!QFile::exists(injectorPath)) {
+        qWarning() << "[CLIENT] Injector.exe not found at" << injectorPath;
         QMessageBox::critical((QWidget*)this->parent(), "Error", "Injector.exe not found in the current directory.\nMake sure your antivirus has not deleted it");
         return false;
     }
@@ -152,6 +165,9 @@ bool GflessClient::injectDll(DWORD pid, const QString &dllPath)
     process.waitForFinished();
 
     qDebug() << process.readAllStandardOutput();
+
+    if (process.exitCode())
+        qWarning() << "[CLIENT] DLL injection failed, exit code:" << process.exitCode();
 
     return !process.exitCode();
 }

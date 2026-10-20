@@ -33,6 +33,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     setupDefaultProfile();
     loadSettings();
+    ui->statusbar->showMessage("Log: " + qApp->property("logPath").toString(), 10000);
     loadAccountProfiles(settingsDialog->getProfilesPath());
 
     if (settingsDialog->getCheckUpdates())
@@ -68,8 +69,13 @@ void MainWindow::loadSettings()
 
     settings.endGroup();
 
+    qInfo() << "[SETTINGS] Game path:" << settingsDialog->getGameClientPath();
+    qInfo() << "[SETTINGS] Open interval:" << settingsDialog->getOpenIntervalMin() << "-" << settingsDialog->getOpenIntervalMax() << "s";
+
     settings.beginGroup("Gameforge Accounts");
     int numAccs = settings.beginReadArray("GF accounts data");
+
+    qInfo() << "[SETTINGS] Loading" << numAccs << "accounts";
 
     for (int i = 0; i < numAccs; ++i) {
         settings.setArrayIndex(i);
@@ -1150,9 +1156,14 @@ void MainWindow::openAccount(const Profile *profile, QQueue<int> accountIndexes)
 
     const GameAccount& gameAccount = profile->getAccounts().at(row);
 
+    qInfo() << "[LAUNCH] === Opening account" << gameAccount.getName() << "===";
+    qInfo() << "[LAUNCH] Random delay for next account:" << openInterval << "s (range" << minInterval << "-" << maxInterval << ")";
+
     ui->statusbar->showMessage("Trying to open account " + gameAccount.getName(), 10000);
 
     QString token = gameAccount.getGfAcc()->getToken(gameAccount.getId());
+
+    qInfo() << "[LAUNCH] Token obtained:" << (!token.isEmpty() ? "yes" : "NO");
 
     if (token.isEmpty()) {
         ui->statusbar->showMessage("Couldn't get token for account " + gameAccount.getName(), 10000);
@@ -1162,12 +1173,16 @@ void MainWindow::openAccount(const Profile *profile, QQueue<int> accountIndexes)
 
         QString customPath = gameAccount.getGfAcc()->getcustomClientPath();
 
+        qInfo() << "[LAUNCH] Launching with path:" << (customPath.isEmpty() ? gamePath : customPath);
+
         if (gflessClient->openClient(gameAccount.getName(), token, customPath.isEmpty() ? gamePath : customPath, gameLang, pid)) {
+            qInfo() << "[LAUNCH] PID:" << pid;
             QString msg = "Launched game with PID " + QString::number(pid);
             ui->statusbar->showMessage(msg, 10000);
             processAccounts.insert(pid, gameAccount);
         }
         else {
+            qWarning() << "[LAUNCH] openClient failed for" << gameAccount.getName();
             ui->statusbar->showMessage("Failed to launch game for account " + gameAccount.getName(), 10000);
         }
     }

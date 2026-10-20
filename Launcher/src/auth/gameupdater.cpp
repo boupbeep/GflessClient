@@ -20,7 +20,12 @@ void GameUpdater::updateFiles() const
     if (nostaleDirectoryPath.isEmpty())
         return;
 
+    qInfo() << "[UPDATE] Starting update for:" << nostaleDirectoryPath;
+    qInfo() << "[UPDATE] Fetching file manifest...";
+
     QJsonArray filesInfo = getRemoteFilesInformation();
+
+    qInfo() << "[UPDATE] Files to check:" << filesInfo.size();
 
     for (int i = 0; i < filesInfo.size(); ++i) {
 
@@ -39,6 +44,8 @@ void GameUpdater::updateFiles() const
         QByteArray localHash = getLocalHash(filePath);
 
         if (localHash != remoteHash) {
+            qInfo() << "[UPDATE] Updating file:" << filePath;
+
             QByteArray fileContent = downloadFile(remotePath);
 
             if (!saveFile(fileContent, filePath)) {
@@ -51,6 +58,14 @@ void GameUpdater::updateFiles() const
                     if (gfAcc->getcustomClientPath().isEmpty())
                         continue;
 
+                    qInfo() << "[UPDATE] Copying NostaleClientX.exe to custom path:" << gfAcc->getcustomClientPath();
+
+                    // A running or read-only target would make the overwrite fail silently
+                    if (QFile::exists(gfAcc->getcustomClientPath())) {
+                        qInfo() << "[UPDATE] Removing existing" << gfAcc->getcustomClientPath() << "before copy";
+                        QFile::remove(gfAcc->getcustomClientPath());
+                    }
+
                     if (!saveFile(fileContent, gfAcc->getcustomClientPath())) {
                         qDebug() << "Couldn't save file:" << gfAcc->getcustomClientPath();
                     }
@@ -60,6 +75,8 @@ void GameUpdater::updateFiles() const
 
         emit setProgress((i * 100) / filesInfo.size());
     }
+
+    qInfo() << "[UPDATE] Update complete";
 }
 
 QJsonArray GameUpdater::getRemoteFilesInformation() const
