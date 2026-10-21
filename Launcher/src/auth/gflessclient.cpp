@@ -1,5 +1,45 @@
 #include "gflessclient.h"
 #include <QMessageBox>
+#include <TlHelp32.h>
+
+// The thread id returned by QProcess can't be trusted after startDetached (Qt frees its PROCESS_INFORMATION),
+// so look up the main thread of the suspended process instead.
+static DWORD findMainThreadId(DWORD pid)
+{
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+
+    if (snapshot == INVALID_HANDLE_VALUE)
+        return 0;
+
+    THREADENTRY32 entry;
+    entry.dwSize = sizeof(entry);
+    DWORD found = 0;
+
+    if (Thread32First(snapshot, &entry)) {
+        do {
+            if (entry.th32OwnerProcessID == pid) {
+                found = entry.th32ThreadID;
+                break;
+            }
+        } while (Thread32Next(snapshot, &entry));
+    }
+
+    CloseHandle(snapshot);
+
+    return found;
+}
+
+// Don't leave a suspended game process behind when the launch fails
+static void killSuspendedProcess(DWORD pid)
+{
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+
+    if (hProcess == NULL)
+        return;
+
+    TerminateProcess(hProcess, 1);
+    CloseHandle(hProcess);
+}
 
 GflessClient::GflessClient(QObject *parent) : QObject(parent)
 {
@@ -35,12 +75,8 @@ bool GflessClient::openClient(const QString& displayName, const QString& token, 
     process.setProgram(gameClientPath);
     process.setArguments({"gf", QString::number(gameLanguage)});
 
-    PROCESS_INFORMATION* procInfo;
-    DWORD threadId;
-
     process.setCreateProcessArgumentsModifier([&](QProcess::CreateProcessArguments *args) {
         args->flags |= CREATE_SUSPENDED;
-        procInfo = args->processInformation;
     });
 
     qInfo() << "[CLIENT] Creating process:" << gameClientPath;
@@ -54,7 +90,9 @@ bool GflessClient::openClient(const QString& displayName, const QString& token, 
 
     qInfo() << "[CLIENT] Process created, PID:" << pid;
 
-    threadId = procInfo->dwThreadId;
+    DWORD threadId = findMainThreadId(pid);
+
+    qInfo() << "[CLIENT] Main thread ID:" << threadId;
 
     QString dllPath = QDir::currentPath() + "/GflessDLL.dll";
 
@@ -66,17 +104,19 @@ bool GflessClient::openClient(const QString& displayName, const QString& token, 
         qDebug() << "Dll injected successfully";
 
     // Resume the game
-    HANDLE hThread = OpenThread(THREAD_ALL_ACCESS, FALSE, threadId);
+    HANDLE hThread = threadId ? OpenThread(THREAD_SUSPEND_RESUME, FALSE, threadId) : NULL;
 
     if (hThread == NULL)
     {
-        qWarning() << "[CLIENT] Error on OpenThread:" << GetLastError();
+        qWarning() << "[CLIENT] Error on OpenThread:" << GetLastError() << "(thread" << threadId << ")";
+        killSuspendedProcess(pid);
         return false;
     }
 
-    if (ResumeThread(hThread) == -1) {
+    if (ResumeThread(hThread) == (DWORD)-1) {
         qWarning() << "[CLIENT] ResumeThread failed, error:" << GetLastError();
         CloseHandle(hThread);
+        killSuspendedProcess(pid);
         return false;
     }
 
